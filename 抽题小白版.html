@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>呼吸系统知识点抽题系统</title>
+  <style>
+    body {
+      font-family: 'Microsoft YaHei', sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+
+    .category {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .tag {
+      padding: 8px 15px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      user-select: none;
+    }
+
+    .selected {
+      background-color: #4CAF50;
+      color: white;
+      border-color: #4CAF50;
+    }
+
+    #questionContainer, #bankContainer {
+      margin-top: 30px;
+      padding: 20px;
+      border: 2px solid #eee;
+      border-radius: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .question, .bank-question {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-left: 4px solid #2196F3;
+    }
+
+    .number-control {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-right: 15px;
+    }
+
+    .number-control input {
+      width: 50px;
+      text-align: center;
+    }
+
+    .error-message {
+      color: red;
+      margin-top: 10px;
+    }
+
+    .bank-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 10px;
+    }
+
+    .bank-question {
+      font-size: 0.95em;
+      border-left: 3px solid #2196F3;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>请选择抽题范围（单击选择/双击取消）</h2>
+  <div class="category" id="category"></div>
+
+  <div style="display: flex; align-items: center; margin: 20px 0;">
+    <div class="number-control">
+      <button onclick="decreaseNumber()" type="button">-</button>
+      <input type="number" id="numQuestions" value="1" min="1" onchange="updateNumber()">
+      <button onclick="increaseNumber()" type="button">+</button>
+    </div>
+    <button onclick="drawQuestion()">随机抽题</button>
+    <p id="errorMsg" class="error-message"></p>
+  </div>
+
+  <div id="questionContainer"></div>
+
+  <h3 id="bankTitle">题库总览</h3>
+  <div id="bankContainer"></div>
+
+  <script>
+    // ✅ 用户只需修改此处，替换整个 questions 对象
+    let questions = {
+      "新分类1": [
+      { "question": "新题目1", "answer": "新答案1" },
+      { "question": "新题目2", "answer": "新答案2" }
+    ],
+    "新分类2": [
+      { "question": "另一分类题目", "answer": "对应答案" }
+    ]
+    };
+
+    // ✅ 全局变量
+    let numQuestions = 1;
+    let selectedCategories = new Set();
+
+    // ✅ 页面加载时初始化
+    window.addEventListener("load", () => {
+      initializeApp();
+    });
+
+    // ✅ 初始化函数：生成标签 + 更新题库展示
+    function initializeApp() {
+      generateCategoryTags();       // 生成分类标签
+      updateBankDisplay();          // 更新题库总览
+      updateMaxValue();             // 更新最大抽题数
+      bindCategoryClickEvents();    // 绑定点击事件
+    }
+
+    // ✅ 自动生分类标签（基于 questions 的键）
+    function generateCategoryTags() {
+      const container = document.getElementById("category");
+      container.innerHTML = ""; // 清空旧标签
+
+      Object.keys(questions).forEach(cat => {
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.dataset.category = cat;
+        tag.textContent = cat; // 直接使用键名作为显示文本
+        container.appendChild(tag);
+      });
+    }
+
+    // ✅ 题库总览更新逻辑
+    function updateBankDisplay() {
+      const container = document.getElementById('bankContainer');
+      const title = document.getElementById('bankTitle');
+      container.innerHTML = "";
+      let allQuestions = [];
+
+      if (selectedCategories.size === 0) {
+        title.textContent = `题库总览（共 ${Object.values(questions).reduce((sum, arr) => sum + arr.length, 0)} 道题）`;
+        Object.values(questions).forEach(category => {
+          allQuestions.push(...category);
+        });
+      } else {
+        let count = 0;
+        selectedCategories.forEach(cat => {
+          if (questions[cat]) {
+            allQuestions.push(...questions[cat]);
+            count += questions[cat].length;
+          }
+        });
+        title.textContent = `题库总览（共 ${count} 道题）`;
+      }
+
+      if (allQuestions.length === 0) {
+        container.innerHTML = "<p>当前范围内暂无题目</p>";
+        return;
+      }
+
+      const list = document.createElement('div');
+      list.className = 'bank-list';
+
+      allQuestions.forEach((q, index) => {
+        const card = document.createElement('div');
+        card.className = 'bank-question';
+        card.innerHTML = `<span style="color:#555">${index + 1}. </span>${q.question}`;
+        list.appendChild(card);
+      });
+
+      container.appendChild(list);
+    }
+
+    // ✅ 更新最大抽题数
+    function updateMaxValue() {
+      let currentTotal = 0;
+      selectedCategories.forEach(cat => {
+        if (questions[cat]) currentTotal += questions[cat].length;
+      });
+      window.maxAvailable = currentTotal;
+    }
+
+    // ✅ 分类标签点击事件绑定
+    function bindCategoryClickEvents() {
+      document.querySelectorAll('.tag').forEach(tag => {
+        tag.addEventListener('click', function (e) {
+          if (e.detail === 2) {
+            this.classList.remove('selected');
+            selectedCategories.delete(this.dataset.category);
+          } else {
+            this.classList.toggle('selected');
+            this.classList.contains('selected')
+              ? selectedCategories.add(this.dataset.category)
+              : selectedCategories.delete(this.dataset.category);
+          }
+          updateBankDisplay();
+          updateMaxValue();
+          checkNumLimit();
+        });
+      });
+    }
+
+    // ✅ 检查题目数量是否超出范围
+    function checkNumLimit() {
+      const input = document.getElementById('numQuestions');
+      const currentTotal = window.maxAvailable;
+      if (numQuestions > currentTotal) {
+        numQuestions = currentTotal;
+        input.value = currentTotal;
+        showError(`已自动调整为最大可用数量：${currentTotal}`);
+      }
+    }
+
+    // ✅ 抽题函数
+    function drawQuestion() {
+      const container = document.getElementById('questionContainer');
+      container.innerHTML = "";
+
+      if (selectedCategories.size === 0) {
+        container.innerHTML = "<p style='color:red'>请先选择抽题范围！</p>";
+        return;
+      }
+
+      let pool = [];
+      selectedCategories.forEach(cat => {
+        if (questions[cat]) pool.push(...questions[cat]);
+      });
+
+      if (pool.length === 0) {
+        container.innerHTML = "<p>所选分类暂无题目</p>";
+        return;
+      }
+
+      const drawnQuestions = [];
+      const tempPool = [...pool];
+
+      while (drawnQuestions.length < numQuestions && tempPool.length > 0) {
+        const randomIndex = Math.floor(Math.random() * tempPool.length);
+        drawnQuestions.push(tempPool[randomIndex]);
+        tempPool.splice(randomIndex, 1);
+      }
+
+      drawnQuestions.forEach((q, index) => {
+        const div = document.createElement('div');
+        div.className = 'question';
+        div.innerHTML = `
+          <p><strong>题目 ${index + 1}：</strong>${q.question}</p>
+          <p><button onclick="this.nextElementSibling.style.display='block'">显示答案</button>
+          <span style="display:none;color:#4CAF50"><strong>答案：</strong>${q.answer}</span></p>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // ✅ 控制输入框最大值
+    function updateMaxValue() {
+      let currentTotal = 0;
+      selectedCategories.forEach(cat => {
+        if (questions[cat]) currentTotal += questions[cat].length;
+      });
+      window.maxAvailable = currentTotal;
+    }
+
+    function checkNumLimit() {
+      const input = document.getElementById('numQuestions');
+      const currentTotal = window.maxAvailable;
+      if (numQuestions > currentTotal) {
+        numQuestions = currentTotal;
+        input.value = currentTotal;
+        showError(`已自动调整为最大可用数量：${currentTotal}`);
+      }
+    }
+
+    function increaseNumber() {
+      updateMaxValue();
+      if (numQuestions < window.maxAvailable) {
+        numQuestions++;
+        document.getElementById('numQuestions').value = numQuestions;
+        clearError();
+      }
+    }
+
+    function decreaseNumber() {
+      if (numQuestions > 1) {
+        numQuestions--;
+        document.getElementById('numQuestions').value = numQuestions;
+        clearError();
+      }
+    }
+
+    function updateNumber() {
+      updateMaxValue();
+      const input = document.getElementById('numQuestions');
+      let value = parseInt(input.value);
+      if (!isNaN(value) && value >= 1) {
+        if (value > window.maxAvailable) {
+          numQuestions = window.maxAvailable;
+          input.value = window.maxAvailable;
+          showError(`最多只能抽取 ${window.maxAvailable} 道题目`);
+        } else {
+          numQuestions = value;
+          clearError();
+        }
+      } else {
+        numQuestions = 1;
+        input.value = 1;
+        showError('请输入有效的题目数量');
+      }
+    }
+
+    function clearError() {
+      document.getElementById('errorMsg').textContent = '';
+    }
+
+    function showError(message) {
+      document.getElementById('errorMsg').textContent = message;
+    }
+  </script>
+</body>
+</html>
